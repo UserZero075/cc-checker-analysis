@@ -28,10 +28,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p inputs results
-          gh release download "$INPUT_RELEASE_TAG" \
-            --pattern 'cc-checker-core.exe' \
-            --pattern 'CleanControllerImpl.dll' \
-            --dir inputs
+          release_json=$(gh api "repos/$GH_REPO/releases/tags/$INPUT_RELEASE_TAG")
+          for asset in cc-checker-core.exe CleanControllerImpl.dll; do
+            asset_id=$(jq -er --arg name "$asset" '.assets[] | select(.name == $name) | .id' <<< "$release_json")
+            gh api -H 'Accept: application/octet-stream' \
+              "repos/$GH_REPO/releases/assets/$asset_id" > "inputs/$asset"
+          done
           printf '%s  %s\n' \
             '7eb56e29ec2ed16ed157ddc7e8c2c6c8c839376b0514b795f6d554429ea8fdb1' 'inputs/cc-checker-core.exe' \
             '868b9ae320893804b68bfebe75800f4f589c7836f2120885c8b741fe1fced220' 'inputs/CleanControllerImpl.dll' \

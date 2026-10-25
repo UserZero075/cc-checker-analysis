@@ -1,0 +1,82 @@
+{
+  "assessment": {
+    "classification": "malware",
+    "family": "cryptocurrency clipboard hijacker (crypto-clipper)",
+    "confidence": "high",
+    "useful_card_checker_evidence": false,
+    "self_replicating_virus_confirmed": false
+  },
+  "input": {
+    "archive": {
+      "format": "RAR5",
+      "bytes": 4427086,
+      "sha256": "a65ffb8b1abe31ff3c7153795180f2b40e82d3ed105b999ae59096c90dc525e3",
+      "integrity_test": "7zz t: Everything is Ok"
+    },
+    "main_exe_sha256": "4ca03bb7a95f6a6a2a531094277c440a5dfe167e55b5de3e365e2b72ca5b2962",
+    "reduced_pe": {
+      "bytes": 106496,
+      "sha256": "7eb56e29ec2ed16ed157ddc7e8c2c6c8c839376b0514b795f6d554429ea8fdb1",
+      "trailing_zero_overlay_bytes_verified": 733896704
+    },
+    "unpacked_pe": {
+      "bytes": 265216,
+      "sha256": "6ffc4ca8f82b7c3a62468208896eaedefcf2bf62f610df7fa20b5498b2ed0034",
+      "upx_version": "5.2.1",
+      "upx_test": "passed"
+    },
+    "clean_controller_dll_sha256": "868b9ae320893804b68bfebe75800f4f589c7836f2120885c8b741fe1fced220"
+  },
+  "confirmed_static_behaviors": [
+    {
+      "function": "FUN_140003c20",
+      "behavior": "Reads CF_UNICODETEXT through OpenClipboard/GetClipboardData; when the selected output differs, empties the clipboard and writes replacement Unicode text with SetClipboardData."
+    },
+    {
+      "function": "FUN_140001010",
+      "behavior": "Initializes 17 mapping entries: 16 cryptocurrency-related labels and one STEAMLINK entry. Address/link values are redacted from reports and pseudocode."
+    },
+    {
+      "function": "FUN_140004490",
+      "behavior": "Hides the console, copies the current executable under %LOCALAPPDATA%\\Microsoft\\Windows\\Credentials\\WindowsLogonApplication.exe, relaunches it with CREATE_NO_WINDOW, and creates a global mutex."
+    },
+    {
+      "function": "FUN_140002db0",
+      "behavior": "Queries TokenElevation and relaunches with ShellExecuteExA verb runas when not elevated."
+    },
+    {
+      "function": "FUN_14001bad4",
+      "behavior": "Calls IsDebuggerPresent in exception-handling logic; anti-analysis indicator, not conclusive by itself."
+    }
+  ],
+  "observed_mapping_labels": [
+    "BTC_LEGACY", "BTC_SEGWIT_P2SH", "BTC_BECH32",
+    "LTC_P2SH_L", "LTC_P2SH_M", "LTC_BECH32",
+    "ETH", "DOGE", "TON", "TRX", "BCH", "ZEC", "DASH", "XLM", "XRP", "XMR",
+    "STEAMLINK"
+  ],
+  "other_artifacts": {
+    "clean_controller_impl": "Metadata identifies Malwarebytes CleanController 3.3.0.919; main EXE has no static import or plaintext filename reference. Authenticode digest validity was not verified.",
+    "settings_json_and_utils_dll": "High-entropy opaque blobs; content and role unknown."
+  },
+  "verification_limits": [
+    "No target executable was run.",
+    "No network behavior or Steam token was validated.",
+    "No boot-time persistence mechanism was confirmed.",
+    "No static WinHTTP, WinINet, Winsock, or URLMon import was observed; dynamic loading and opaque blobs remain unknown.",
+    "CleanControllerImpl.dll has not been decompiled.",
+    "GitHub Actions run 40159168462 was blocked by account billing/spending limit before any workflow step ran."
+  ],
+  "local_decompilation": {
+    "tool": "Ghidra 12.1.4",
+    "runtime": "Temurin JDK 21.0.13",
+    "scope": "Unpacked main PE only; heap capped at 1.5 GiB",
+    "open_program": true,
+    "functions_seen": 766,
+    "decompiled_ok": 766,
+    "failed": 0,
+    "raw_output_bytes": 1094625,
+    "published_pseudocode": "redacted for wallet values and token-like strings"
+  },
+  "recommendation": "Treat the package as malware; do not execute. If it ran on a controlled system, isolate it and inspect the masquerading copy path and clipboard activity. Revoke a Steam trade-link token only if it belongs to an account under the user's control."
+}

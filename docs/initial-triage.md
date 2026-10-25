@@ -18,7 +18,7 @@ Análisis estático del archivo `CC Checker.rar` proporcionado por el usuario, c
 ### EXE principal
 
 - PE32+ x86-64, GUI, `SizeOfImage=0x4b000`, 3 secciones; entry RVA `0x48780` cae en `UPX1`.
-- `UPX0` declara 192.512 bytes virtuales y cero bytes almacenados; `UPX1` almacena 103.936 bytes y tiene entropía muestreada 7,99. Las secciones `UPX0`, `UPX1` y la cadena `UPX!` indican con fuerza empaquetado UPX; aún falta validarlo con `upx -t` en CI.
+- `UPX0` declara 192.512 bytes virtuales y cero bytes almacenados; `UPX1` almacena 103.936 bytes y tiene entropía muestreada 7,99. Las secciones `UPX0`/`UPX1` y la cadena `UPX!` indicaban con fuerza empaquetado UPX. La validación posterior con UPX 5.2.1 pasó; véase el dictamen final.
 - El final del fichero empieza en el byte 106.496. Se recorrieron los 733.896.704 bytes restantes y todos son `0x00`. La copia reducida `CCChecker-core.exe` conserva los bytes PE anteriores al relleno; SHA-256 `7eb56e29ec2ed16ed157ddc7e8c2c6c8c839376b0514b795f6d554429ea8fdb1`. El EXE original no se modificó.
 - Imports estáticos observados: `OpenProcessToken`, `LoadLibraryA`, `GetProcAddress`, `VirtualProtect`, `CoInitializeEx`, `ShellExecuteExA` y `ShowWindow`. Son capacidades importadas; por sí solas no demuestran su uso ni un comportamiento concreto.
 - El manifiesto del PE reducido declara `requestedExecutionLevel=asInvoker` y `heapType=SegmentHeap`. El PE no tiene tabla de certificados Authenticode.
@@ -44,10 +44,10 @@ La DLL parece un componente de limpieza de Malwarebytes, pero esto no atribuye e
 
 - No se ejecutó el programa; no hubo captura dinámica, tráfico de red ni observación de persistencia.
 - No se validó criptográficamente la firma Authenticode del DLL.
-- No se desempaquetó todavía el EXE ni se obtuvo pseudocódigo Ghidra.
+- El EXE se validó y desempaquetó con UPX 5.2.1; se obtuvo pseudocódigo Ghidra de la copia de 265.216 bytes (766/766 funciones). El DLL sigue sin decompilarse.
 - No se descifraron `settings.json` ni `utils.dll`.
-- Los strings/imports son evidencia estática; no prueban un call-site o flujo efectivo.
+- Los strings/imports del triage inicial son evidencia limitada; el dictamen final añade los call-sites recuperados con Ghidra.
 
-## Próximo paso automatizado
+## Estado de CI
 
-`analysis-v1` contiene una copia del PE recortada únicamente tras verificar el relleno cero, junto con el DLL. El workflow `analyze.yml` usa UPX 5.2.1 y Ghidra 12.2 en runner x86-64, deja pseudocódigo y logs en el mismo release y verifica los contadores reales de decompilación. No usa Actions artifacts.
+`analysis-v1` contiene el PE reducido y el DLL de entrada. El workflow `analyze.yml` está preparado para UPX 5.2.1 y Ghidra 12.2 en `ubuntu-24.04` x86-64, con resultados y logs en releases (sin Actions artifacts). El primer dispatch (`40159168462`) fue bloqueado por facturación/límite de gasto antes de ejecutar pasos; véase [`docs/final-assessment.md`](final-assessment.md).

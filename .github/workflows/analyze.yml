@@ -12,7 +12,7 @@ on:
 jobs:
   analyze:
     name: x86-64 PE triage and decompilation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 300
     permissions:
       contents: read
@@ -20,7 +20,7 @@ jobs:
       GH_REPO: ${{ github.repository }}
       INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download and verify release inputs
         env:
@@ -75,7 +75,7 @@ jobs:
           printf '%s\n' "$result" | tee results/upx.status
           echo "upx_status=$result" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         name: Install JDK 21
         with:
           distribution: temurin

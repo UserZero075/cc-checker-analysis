@@ -1,33 +1,59 @@
-# CC Checker — análisis privado
+# Recurso educativo: análisis defensivo de malware
 
-Repositorio privado para el análisis estático autorizado del paquete Windows entregado por Marlon. El EXE/DLL no se ejecutan.
+*Por Marlon Sarduy Machado (UserZero075)*
 
-## Alcance y estado
+Este repositorio es un **recurso educativo** para aprender a reconocer y analizar malware de forma defensiva.  
+**No es una herramienta ofensiva.** No ejecutes los binarios incluidos fuera de un entorno aislado.
 
-- Evidencia inicial: [`docs/initial-triage.md`](docs/initial-triage.md).
-- El EXE principal está empaquetado con indicios fuertes de UPX y tiene 733.896.704 bytes finales de relleno cero. La copia PE reducida conserva los 106.496 bytes de imagen; el original queda intacto.
-- `CleanControllerImpl.dll` se analiza como componente separado. Sus metadatos lo identifican como Malwarebytes CleanController 3.3.0.919.
-- Dictamen actualizado: [`docs/final-assessment.md`](docs/final-assessment.md) — malware tipo *crypto-clipper*; no se observó función útil de comprobación de tarjetas.
-- Los binarios objetivo no se versionan en Git. Las copias de entrada y resultados se manejan como assets del release privado `analysis-v1`.
+## Advertencia de seguridad
 
-## Reproducir en GitHub Actions
+Los archivos aquí almacenados son **malware real**. Su propósito es educativo: que estudiantes, analistas y curiosos puedan entender cómo funcionan los programas maliciosos y cómo protegerse de ellos.
 
-```bash
-gh workflow run analyze.yml -R UserZero075/cc-checker-analysis -f release_tag=analysis-v1
+**No ejecutes nada en tu máquina personal.** Usa una máquina virtual aislada, sin conexión a redes sensibles y con permiso explícito.
+
+## Qué encontrarás en este repositorio
+
+- `docs/educational-guide.md` — Guía principal: por qué no descargar programas de Internet, qué es este malware y cómo protegerse.
+- `docs/final-assessment.md` — Análisis técnico del comportamiento del malware (crypto-clipper) con evidencia y límites de verificación.
+- `analysis/final-assessment.json` — Resumen estructurado del análisis.
+- `scripts/` — Herramientas reproducibles para triage de PE, sanitización de salidas y decompilación con Ghidra.
+- `.github/workflows/analyze.yml` — Pipeline de análisis estático (requiere GitHub Actions habilitado y facturación válida).
+- `release: educational-resource-v1` — Binario original (`CC Checker.exe`, 734 MB) para análisis autorizado. **Advertencia: es malware.**
+
+## Cómo usar este recurso
+
+1. **Lee primero** `docs/educational-guide.md`.
+2. **Entiende el riesgo**: el binario es un crypto-clipper. No lo ejecutes.
+3. **Si quieres analizar**: hazlo en un entorno aislado, con permiso y sin exponer datos reales.
+4. **Verifica hashes**: todos los archivos tienen SHA-256 documentado. Compáralos antes de usarlos.
+5. **No compartas** el binario fuera de contextos educativos autorizados.
+
+## Estructura del repositorio
+
+```
+docs/
+  educational-guide.md    # Guía educativa principal
+  final-assessment.md     # Dictamen técnico del malware
+analysis/
+  final-assessment.json   # Resumen estructurado
+scripts/
+  triage_pe.py            # Inventario PE (hashes, secciones, imports, exports)
+  redact_outputs.py       # Sanitización de secretos y valores sensibles
+  summarize_ghidra.py     # Validación de resultados de Ghidra
+  DecompileAll.java       # Script Ghidra para decompilación masiva
+.github/workflows/
+  analyze.yml             # Pipeline CI (bloqueado por facturación en este repo)
 ```
 
-El workflow valida hashes, prueba/desempaqueta UPX si procede y ejecuta Ghidra headless en `ubuntu-24.04` x86-64 con JDK 21. Incluye preflight del decompilador nativo y contadores de salida.
+## Advertencias importantes
 
-El dispatch `40159168462` no llegó a ejecutar pasos: GitHub lo bloqueó por facturación/límite de gasto. Como alternativa acotada se descompiló localmente solo el EXE desempaquetado (265.216 bytes): Ghidra abrió el programa y produjo 766/766 funciones, heap limitado a 1,5 GB. El DLL queda pendiente de CI.
+- **No ejecutes el binario.** Es malware real.
+- **No compartas** el binario sin contexto educativo y autorización.
+- **No uses** este material para atacar sistemas ajenos.
+- **No confíes** en programas descargados de Internet sin verificar firma y origen.
 
-**Todos los logs y resultados se suben al release `analysis-v1`**, no a Actions artifacts. El workflow requiere el secret de repositorio `PAT_REPO_TOKEN` para escribir assets en un release privado. El token no se almacena en el repositorio ni en los informes.
+## Licencia y uso
 
-## Contenido
+Este material es para fines educativos y de análisis defensivo. El autor (Marlon Sarduy Machado) no se responsabiliza del uso indebido del binario o del código aquí compartido.
 
-- `docs/`: informes humanos y límites de verificación.
-- `scripts/`: triage reproducible, sanitización de resultados y script Java de Ghidra.
-- `.github/workflows/analyze.yml`: pipeline manual de análisis.
-
-## Límites
-
-La descompilación produce pseudocódigo aproximado, no el código fuente original. El análisis estático no prueba el comportamiento en ejecución. `settings.json` y `utils.dll` no se incluyen en CI: son blobs de alta entropía sin estructura reconocible y no son necesarios para analizar las funciones exportadas del DLL.
+*Un archivo desconocido no es un programa: es un riesgo.*

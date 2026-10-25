@@ -1,0 +1,14 @@
+# No versionar objetivos, copias desempaquetadas ni resultados pesados
+*.exe
+*.dll
+*.rar
+*.bin
+inputs/
+binary/
+unpacked/
+results/
+payloads/
+dumped/
+*.gz
+__pycache__/
+*.pyc

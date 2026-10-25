@@ -1,0 +1,177 @@
+name: CC Checker static triage and Ghidra
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Private release tag holding the input binaries
+        required: true
+        type: string
+        default: analysis-v1
+
+jobs:
+  analyze:
+    name: x86-64 PE triage and decompilation
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    permissions:
+      contents: read
+    env:
+      GH_REPO: ${{ github.repository }}
+      INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download and verify release inputs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p inputs results
+          gh release download "$INPUT_RELEASE_TAG" \
+            --pattern 'cc-checker-core.exe' \
+            --pattern 'CleanControllerImpl.dll' \
+            --dir inputs
+          printf '%s  %s\n' \
+            '7eb56e29ec2ed16ed157ddc7e8c2c6c8c839376b0514b795f6d554429ea8fdb1' 'inputs/cc-checker-core.exe' \
+            '868b9ae320893804b68bfebe75800f4f589c7836f2120885c8b741fe1fced220' 'inputs/CleanControllerImpl.dll' \
+            | sha256sum --check - | tee results/input-hash-check.txt
+          file inputs/cc-checker-core.exe inputs/CleanControllerImpl.dll | tee results/input-file-types.txt
+          sha256sum inputs/cc-checker-core.exe inputs/CleanControllerImpl.dll > results/input.SHA256SUMS
+          python3 scripts/triage_pe.py \
+            inputs/cc-checker-core.exe inputs/CleanControllerImpl.dll \
+            --outdir results | tee results/triage-run.log
+
+      - name: Install pinned UPX and test the packed PE
+        id: upx
+        run: |
+          set -euo pipefail
+          url='https://github.com/upx/upx/releases/download/v5.2.1/upx-5.2.1-amd64_linux.tar.xz'
+          curl --fail --location --retry 3 --silent --show-error "$url" -o "$RUNNER_TEMP/upx.tar.xz"
+          printf '%s  %s\n' \
+            '402162aad30af47e60dbd767fb2e64ca394ace9727ba1f40283641f1d1b91657' "$RUNNER_TEMP/upx.tar.xz" \
+            | sha256sum --check - | tee results/upx-tool-hash.txt
+          tar -xJf "$RUNNER_TEMP/upx.tar.xz" -C "$RUNNER_TEMP"
+          UPX="$RUNNER_TEMP/upx-5.2.1-amd64_linux/upx"
+          "$UPX" --version | tee results/upx-version.txt
+          result='not-unpacked'
+          if "$UPX" -t inputs/cc-checker-core.exe > results/upx-test.log 2>&1; then
+            if "$UPX" -d -o results/CCChecker-unpacked.exe inputs/cc-checker-core.exe > results/upx-unpack.log 2>&1; then
+              result='unpacked'
+              file results/CCChecker-unpacked.exe | tee results/unpacked-file-type.txt
+              sha256sum results/CCChecker-unpacked.exe > results/unpacked.SHA256SUMS
+              python3 scripts/triage_pe.py results/CCChecker-unpacked.exe --outdir results \
+                | tee results/unpacked-triage.log
+            else
+              echo 'UPX test passed but decompression failed; preserving DLL analysis.' \
+                | tee results/upx-unpack-failure.txt
+            fi
+          else
+            echo 'UPX test failed or format unsupported; the main EXE remains packed.' \
+              | tee results/upx-test-failure.txt
+          fi
+          printf '%s\n' "$result" | tee results/upx.status
+          echo "upx_status=$result" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        name: Install JDK 21
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Download pinned Ghidra 12.2
+        run: |
+          set -euo pipefail
+          url='https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.2_build/ghidra_12.2_PUBLIC_20261016.zip'
+          curl --fail --location --retry 3 --silent --show-error "$url" -o "$RUNNER_TEMP/ghidra.zip"
+          printf '%s  %s\n' \
+            '2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67' "$RUNNER_TEMP/ghidra.zip" \
+            | sha256sum --check - | tee results/ghidra-tool-hash.txt
+          mkdir -p "$RUNNER_TEMP/ghidra"
+          unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra"
+          echo "GHIDRA_DIR=$RUNNER_TEMP/ghidra/ghidra_12.2_PUBLIC" >> "$GITHUB_ENV"
+          test -x "$RUNNER_TEMP/ghidra/ghidra_12.2_PUBLIC/support/analyzeHeadless"
+          java -version 2>&1 | tee results/java-version.txt
+
+      - name: Preflight native Ghidra decompiler
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = 'x86_64'
+          test -x "$GHIDRA_DIR/Ghidra/Features/Decompiler/os/linux_x86_64/decompile"
+          echo "OK: native decompiler exists for linux_x86_64" | tee results/ghidra-preflight.txt
+
+      - name: Ghidra headless analysis
+        timeout-minutes: 220
+        env:
+          JAVA_TOOL_OPTIONS: -Xmx5g
+        run: |
+          set -uo pipefail
+          mkdir -p results "$RUNNER_TEMP/ghidra-projects"
+          run_headless() {
+            name="$1"
+            target="$2"
+            project="$RUNNER_TEMP/ghidra-projects/$name"
+            out="$GITHUB_WORKSPACE/results/$name.c"
+            funcs="$GITHUB_WORKSPACE/results/$name.functions.txt"
+            log="$GITHUB_WORKSPACE/results/$name.ghidra.log"
+            set +e
+            "$GHIDRA_DIR/support/analyzeHeadless" "$project" "$name" \
+              -import "$target" \
+              -scriptPath "$GITHUB_WORKSPACE/scripts" \
+              -deleteProject -max-cpu 2 \
+              -postScript DecompileAll.java "$out" "$funcs" \
+              > "$log" 2>&1
+            status=$?
+            set -e
+            printf '%s\n' "$status" > "$GITHUB_WORKSPACE/results/$name.exitcode"
+            echo "$name headless exit=$status; log=$log"
+            return 0
+          }
+          run_headless 'CleanControllerImpl' 'inputs/CleanControllerImpl.dll'
+          if [ -s results/CCChecker-unpacked.exe ]; then
+            run_headless 'CCChecker-unpacked' 'results/CCChecker-unpacked.exe'
+          else
+            run_headless 'CCChecker-packed-stub' 'inputs/cc-checker-core.exe'
+          fi
+
+      - name: Summarize and validate decompilation counters
+        if: always()
+        run: python3 scripts/summarize_ghidra.py results
+
+      - name: Redact, compress logs and results
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 scripts/redact_outputs.py results
+          shopt -s nullglob
+          for f in results/*.c results/*.functions.txt results/*.log results/*.txt; do
+            gzip -9 -n -c "$f" > "$f.gz"
+          done
+          shopt -u nullglob
+          shopt -s nullglob
+          hash_files=(results/*.gz results/*.json results/*.SHA256SUMS results/*.status)
+          if ((${#hash_files[@]})); then
+            sha256sum "${hash_files[@]}" > results/published.SHA256SUMS
+          fi
+          shopt -u nullglob
+
+      - name: Publish logs and results to the private release
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.PAT_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN" || { echo 'PAT_REPO_TOKEN is missing'; exit 1; }
+          mkdir -p publish
+          shopt -s nullglob
+          files=(results/*.gz results/*.json results/*.SHA256SUMS results/*.status results/published.SHA256SUMS)
+          shopt -u nullglob
+          ((${#files[@]} > 0)) || { echo 'No result files to publish'; exit 1; }
+          for f in "${files[@]}"; do
+            cp "$f" "publish/run-${GITHUB_RUN_ID}-$(basename "$f")"
+          done
+          GH_REPO="$GH_REPO" GH_TOKEN="$GH_TOKEN" \
+            gh release upload "$INPUT_RELEASE_TAG" --clobber publish/*
+          GH_REPO="$GH_REPO" GH_TOKEN="$GH_TOKEN" \
+            gh release view "$INPUT_RELEASE_TAG" --json assets --jq '.assets[].name' \
+            | sort | tee results/release-assets-readback.txt
